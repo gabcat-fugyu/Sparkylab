@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07173a">
+<title>スパーキー使いランキング</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sparky">
+<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+
+<style>
+  /* 配色は仲間内アプリと共通。中身の描画は sparky-view.js 側が持っている */
+  :root {
+    --arena-deep: #07173a;
+    --arena-mid:  #12306e;
+    --arena-lite: #1c4699;
+    --panel-edge: #3a6fd8;
+    --gold:       #ffd23f;
+    --gold-deep:  #b8790a;
+    --gold-lite:  #ffe89a;
+    --elixir:     #d24ce0;
+    --ink:        #ffffff;
+    --ink-dim:    #a9c0ea;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { touch-action: manipulation; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--ink);
+    font-family: 'M PLUS Rounded 1c', system-ui, sans-serif; font-weight: 500;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -5%, #2b5fbf 0%, transparent 60%),
+      repeating-linear-gradient(115deg, rgba(255,255,255,0.022) 0px, rgba(255,255,255,0.022) 2px,
+        transparent 2px, transparent 16px),
+      linear-gradient(180deg, #0d2352 0%, var(--arena-deep) 55%);
+    background-attachment: fixed;
+  }
+  .wrap { max-width: 540px; margin: 0 auto; padding: max(14px, env(safe-area-inset-top)) 12px 90px; }
+  .masthead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+  .crest {
+    font-family: 'Mochiy Pop One', sans-serif; font-size: 16px; letter-spacing: 0.02em;
+    background: linear-gradient(180deg, var(--gold-lite), var(--gold) 45%, var(--gold-deep));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 2px 0 rgba(4,12,32,0.6));
+  }
+  .refresh {
+    position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); right: 50%;
+    transform: translateX(268px);
+    width: 52px; height: 52px; border-radius: 50%; cursor: pointer; font-size: 21px; color: #3d2600;
+    background: linear-gradient(180deg, var(--gold-lite), var(--gold) 50%, #e0a300);
+    border: 3px solid var(--gold-deep); border-bottom-width: 5px;
+    box-shadow: 0 5px 16px rgba(0,0,0,0.45);
+  }
+  @media (max-width: 590px) { .refresh { right: 16px; transform: none; } }
+  .refresh:active { transform: translateY(2px); border-bottom-width: 3px; }
+  @media (max-width: 590px) { .refresh:active { transform: translateY(2px); } }
+  .refresh.busy { animation: turn 0.9s linear infinite; }
+  @keyframes turn { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .refresh.busy { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead"><span class="crest">⚡ SPARKY RANKING</span></div>
+  <div id="main"></div>
+</div>
+<button id="refresh" class="refresh" aria-label="更新">⟳</button>
+
+<script src="./sparky-view.js"></script>
+<script>
+  const $refresh = document.getElementById("refresh");
+
+  // repo を指定しなければ、このページが置かれているリポジトリのデータを読む
+  SparkyView.mount(document.getElementById("main"), {});
+
+  $refresh.onclick = async () => {
+    $refresh.classList.add("busy");
+    await SparkyView.reload();
+    $refresh.classList.remove("busy");
+  };
+</script>
+</body>
+</html>
