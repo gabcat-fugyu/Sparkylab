@@ -1,12 +1,19 @@
 {
-  "updatedAt": "2026-10-06T08:01:32+00:00",
+  "updatedAt": "2026-10-06T08:31:18+00:00",
   "card": "Sparky",
   "threshold": 0.5,
   "regions": [
     {
+      "key": "jp",
+      "label": "日本",
+      "scanned": 1,
+      "source": "/locations/57000122/pathoflegend/players",
+      "players": []
+    },
+    {
       "key": "global",
       "label": "世界",
-      "scanned": 2,
+      "scanned": 4,
       "source": "/locations/global/pathoflegend/players",
       "players": []
     }
