@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T02:32:07+00:00",
+  "updatedAt": "2026-10-07T03:02:20+00:00",
   "card": "Sparky",
   "threshold": 0.5,
   "regions": [
@@ -13,7 +13,7 @@
     {
       "key": "global",
       "label": "世界",
-      "scanned": 74,
+      "scanned": 76,
       "source": "/locations/global/pathoflegend/players",
       "players": [
         {
@@ -159,7 +159,7 @@
           "tag": "#2C88CYV9L",
           "name": "Seiya de Pégaso",
           "clan": "GUERREIROS PT",
-          "boardRank": 20,
+          "boardRank": 22,
           "rating": 1825,
           "ratingFrom": "eloRating",
           "battles": 30,
@@ -431,8 +431,8 @@
         {
           "tag": "#PQC0J0900",
           "name": "风神│Zen'龙卷",
-          "clan": null,
-          "boardRank": 47,
+          "clan": "00:00",
+          "boardRank": 48,
           "rating": 1744,
           "ratingFrom": "eloRating",
           "battles": 30,
@@ -568,7 +568,7 @@
           "tag": "#9UYR20JY0",
           "name": "℧∮ℴℬℜคℊ❤️丂卩口尺Ｋㄚ",
           "clan": "Top Flame",
-          "boardRank": 59,
+          "boardRank": 60,
           "rating": 1719,
           "ratingFrom": "eloRating",
           "battles": 30,
@@ -580,7 +580,7 @@
             {
               "name": "Goblin Giant",
               "id": 26000060,
-              "level": 11,
+              "level": 6,
               "starLevel": 3,
               "evolutionLevel": 1,
               "maxLevel": 11,
@@ -595,7 +595,7 @@
             {
               "name": "Mini P.E.K.K.A",
               "id": 26000018,
-              "level": 14,
+              "level": 9,
               "starLevel": 2,
               "evolutionLevel": 2,
               "maxLevel": 14,
@@ -610,7 +610,7 @@
             {
               "name": "Zap",
               "id": 28000008,
-              "level": 16,
+              "level": 11,
               "starLevel": 1,
               "evolutionLevel": 1,
               "maxLevel": 16,
@@ -623,35 +623,9 @@
               }
             },
             {
-              "name": "Electro Wizard",
-              "id": 26000042,
-              "level": 8,
-              "starLevel": 1,
-              "maxLevel": 8,
-              "maxEvolutionLevel": 2,
-              "rarity": "legendary",
-              "elixirCost": 4,
-              "iconUrls": {
-                "medium": "https://api-assets.clashroyale.com/cards/300/RsFaHgB3w6vXsTjXdPr3x8l_GbV9TbOUCvIx07prbrQ.png",
-                "heroMedium": "https://api-assets.clashroyale.com/cardheroes/300/RsFaHgB3w6vXsTjXdPr3x8l_GbV9TbOUCvIx07prbrQ.png"
-              }
-            },
-            {
-              "name": "Sparky",
-              "id": 26000033,
-              "level": 8,
-              "starLevel": 1,
-              "maxLevel": 8,
-              "rarity": "legendary",
-              "elixirCost": 6,
-              "iconUrls": {
-                "medium": "https://api-assets.clashroyale.com/cards/300/2GKMkBrArZXgQxf2ygFjDs4VvGYPbx8F6Lj_68iVhIM.png"
-              }
-            },
-            {
               "name": "Dark Prince",
               "id": 26000027,
-              "level": 11,
+              "level": 6,
               "starLevel": 1,
               "maxLevel": 11,
               "maxEvolutionLevel": 2,
@@ -663,9 +637,21 @@
               }
             },
             {
+              "name": "Rage",
+              "id": 28000002,
+              "level": 6,
+              "starLevel": 1,
+              "maxLevel": 11,
+              "rarity": "epic",
+              "elixirCost": 2,
+              "iconUrls": {
+                "medium": "https://api-assets.clashroyale.com/cards/300/bGP21OOmcpHMJ5ZA79bHVV2D-NzPtDkvBskCNJb7pg0.png"
+              }
+            },
+            {
               "name": "Heal Spirit",
               "id": 28000016,
-              "level": 14,
+              "level": 9,
               "starLevel": 1,
               "maxLevel": 14,
               "rarity": "rare",
@@ -675,15 +661,29 @@
               }
             },
             {
-              "name": "Rage",
-              "id": 28000002,
-              "level": 11,
+              "name": "Sparky",
+              "id": 26000033,
+              "level": 3,
               "starLevel": 1,
-              "maxLevel": 11,
-              "rarity": "epic",
-              "elixirCost": 2,
+              "maxLevel": 8,
+              "rarity": "legendary",
+              "elixirCost": 6,
               "iconUrls": {
-                "medium": "https://api-assets.clashroyale.com/cards/300/bGP21OOmcpHMJ5ZA79bHVV2D-NzPtDkvBskCNJb7pg0.png"
+                "medium": "https://api-assets.clashroyale.com/cards/300/2GKMkBrArZXgQxf2ygFjDs4VvGYPbx8F6Lj_68iVhIM.png"
+              }
+            },
+            {
+              "name": "Electro Wizard",
+              "id": 26000042,
+              "level": 3,
+              "starLevel": 1,
+              "maxLevel": 8,
+              "maxEvolutionLevel": 2,
+              "rarity": "legendary",
+              "elixirCost": 4,
+              "iconUrls": {
+                "medium": "https://api-assets.clashroyale.com/cards/300/RsFaHgB3w6vXsTjXdPr3x8l_GbV9TbOUCvIx07prbrQ.png",
+                "heroMedium": "https://api-assets.clashroyale.com/cardheroes/300/RsFaHgB3w6vXsTjXdPr3x8l_GbV9TbOUCvIx07prbrQ.png"
               }
             }
           ],
@@ -691,7 +691,7 @@
             {
               "name": "Dagger Duchess",
               "id": 159000002,
-              "level": 8,
+              "level": 3,
               "maxLevel": 8,
               "rarity": "legendary",
               "iconUrls": {
@@ -705,14 +705,14 @@
           "tag": "#VYRCJYVCU",
           "name": "Yosuru❤️K✨Yoko",
           "clan": "PekkaBS",
-          "boardRank": 65,
-          "rating": 1696,
+          "boardRank": 69,
+          "rating": 1671,
           "ratingFrom": "eloRating",
           "battles": 30,
           "targetBattles": 30,
           "usageRate": 100.0,
-          "wins": 20,
-          "winRate": 66.7,
+          "wins": 19,
+          "winRate": 63.3,
           "deck": [
             {
               "name": "Wizard",
