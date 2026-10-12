@@ -78,7 +78,8 @@
   const $refresh = document.getElementById("refresh");
 
   // repo を指定しなければ、このページが置かれているリポジトリのデータを読む
-  SparkyView.mount(document.getElementById("main"), {});
+  // 独自ドメインにしてもデータの場所が分かるよう、リポジトリを明記する
+  SparkyView.mount(document.getElementById("main"), { repo: "gabcat-fugyu/Sparkylab", branch: "main" });
 
   $refresh.onclick = async () => {
     $refresh.classList.add("busy");
