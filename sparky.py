@@ -91,10 +91,10 @@ def api_get(path: str, token: str):
 
 
 def save_json(path: Path, data):
-    """JSONを整形して書き出す。"""
+    """JSONを書き出す。スマホで読み込むので、字下げを入れずに詰めて書く。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8"
     )
 
 
