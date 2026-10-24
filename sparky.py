@@ -44,8 +44,28 @@ OUT_FILE = ROOT / "data" / "sparky.json"
 API_BASE = "https://proxy.royaleapi.dev/v1"
 
 
+RETRIES = 3        # 一時的な失敗(混雑・通信エラー)は数回やり直す
+RETRY_WAIT = 3     # やり直すまでの秒数(回数に応じて伸ばす)
+
+
 def api_get(path: str, token: str):
-    """APIを叩いてJSONを返す。取得できなければ None。"""
+    """APIを叩いてJSONを返す。取得できなければ None。
+
+    中継サーバーはたまに 429 / 5xx / タイムアウトを返す。
+    1回の失敗で諦めると、その地域や人がランキングから消えるので、少し待ってやり直す。
+    """
+    for attempt in range(1, RETRIES + 1):
+        result, retry = _api_get_once(path, token)
+        if not retry:
+            return result
+        if attempt < RETRIES:
+            time.sleep(RETRY_WAIT * attempt)
+    print(f"  諦めました: {path}", file=sys.stderr)
+    return None
+
+
+def _api_get_once(path: str, token: str):
+    """1回だけ叩く。(結果, やり直すべきか) を返す。"""
     req = urllib.request.Request(
         f"{API_BASE}{path}",
         headers={
@@ -63,7 +83,7 @@ def api_get(path: str, token: str):
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as res:
-            return json.loads(res.read().decode("utf-8"))
+            return json.loads(res.read().decode("utf-8")), False
     except urllib.error.HTTPError as e:
         body = ""
         try:
@@ -79,15 +99,23 @@ def api_get(path: str, token: str):
                 "403: トークン/IP設定、またはCloudflareのbot判定が原因の可能性があります"
             )
         if e.code == 404:
-            return None
+            return None, False
         if e.code == 429:
-            print("  スキップ: レート制限に達しました", file=sys.stderr)
-            return None
-        print(f"  スキップ: APIエラー {e.code} ({path})", file=sys.stderr)
-        return None
+            print(f"  失敗: レート制限 ({path})", file=sys.stderr)
+            return None, True
+        print(f"  失敗: APIエラー {e.code} ({path})", file=sys.stderr)
+        return None, e.code >= 500
     except urllib.error.URLError as e:
-        print(f"  スキップ: 通信エラー {e.reason} ({path})", file=sys.stderr)
-        return None
+        print(f"  失敗: 通信エラー {e.reason} ({path})", file=sys.stderr)
+        return None, True
+    except (TimeoutError, ConnectionError, OSError) as e:
+        # 読み込み途中のタイムアウトは URLError にならず素で飛んでくる。
+        # 前はここで丸ごと落ちていた
+        print(f"  失敗: 通信エラー {type(e).__name__} ({path})", file=sys.stderr)
+        return None, True
+    except json.JSONDecodeError:
+        print(f"  失敗: 返答がJSONではありません ({path})", file=sys.stderr)
+        return None, True
 
 
 def save_json(path: Path, data):
@@ -217,8 +245,13 @@ def analyze(tag, token):
     }
 
 
-def scan_board(board, token, cache):
-    """リーダーボード1つ分を調べて、該当者のリストを返す。"""
+def scan_board(board, token, cache, previous=None):
+    """リーダーボード1つ分を調べて、該当者のリストを返す。
+
+    対戦ログが取れなかった人は、前回の集計で該当していればその結果を使う
+    (通信の失敗でランキングから消えないように)。
+    """
+    previous = previous or {}
     found = []
     started = time.time()
     fresh = 0
@@ -232,6 +265,8 @@ def scan_board(board, token, cache):
             stats = cache[tag]
         else:
             stats = analyze(tag, token)
+            if stats is None and tag in previous:
+                stats = previous[tag]
             cache[tag] = stats
             fresh += 1
             if i < len(board):
@@ -284,6 +319,21 @@ def main():
         targets.append(("jp", "日本", jp_id))
     targets.append(("global", "世界", "global"))
 
+    # 前回の集計結果。取れなかった地域や人の穴埋めに使う
+    old = {}
+    try:
+        old = json.loads(OUT_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    old_regions = {r.get("key"): r for r in old.get("regions") or []}
+    stat_keys = ("battles", "targetBattles", "usageRate", "wins", "winRate", "deck", "supportCards")
+    previous = {}
+    for r in old_regions.values():
+        for p in r.get("players") or []:
+            tag = str(p.get("tag", "")).lstrip("#").upper()
+            if tag:
+                previous[tag] = {**{k: p.get(k) for k in stat_keys}, "qualified": True}
+
     cache = {}
     regions = []
     started = time.time()
@@ -292,10 +342,15 @@ def main():
         print(f"\n===== {label} =====")
         board, source = fetch_leaderboard(loc, token, SCAN_LIMIT)
         if not board:
-            print(f"  リーダーボードが空でした。{label}はスキップします")
+            if key in old_regions:
+                # 一時的に取れなかっただけのことが多いので、前回の結果を残す
+                print(f"  リーダーボードが取れませんでした。{label}は前回の結果を表示します")
+                regions.append({**old_regions[key], "stale": True})
+            else:
+                print(f"  リーダーボードが空でした。{label}はスキップします")
             continue
         board = board[:SCAN_LIMIT]
-        players = scan_board(board, token, cache)
+        players = scan_board(board, token, cache, previous)
         regions.append(
             {
                 "key": key,
@@ -306,6 +361,8 @@ def main():
             }
         )
 
+    if regions and all(r.get("stale") for r in regions):
+        raise SystemExit("どの地域も取得できませんでした。前回の結果をそのまま残します")
     if not regions:
         raise SystemExit(
             "リーダーボードが取得できませんでした。"
