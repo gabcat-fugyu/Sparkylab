@@ -45,6 +45,17 @@ API_BASE = "https://proxy.royaleapi.dev/v1"
 
 
 RETRIES = 3        # 一時的な失敗(混雑・通信エラー)は数回やり直す
+TIMEOUT = 15       # 1回の通信を待つ秒数
+
+# 1回の集計にかけてよい時間(秒)。GitHub Actions は45分で打ち切るので、
+# 中継サーバーが重い日でも保存まで辿り着けるよう、これを過ぎたら
+# 残りの人は新しく調べずに前回の判定を使う。
+TIME_BUDGET = float(os.environ.get("SPARKY_TIME_BUDGET", str(35 * 60)))
+STARTED = time.time()
+
+
+def over_budget() -> bool:
+    return time.time() - STARTED > TIME_BUDGET
 RETRY_WAIT = 3     # やり直すまでの秒数(回数に応じて伸ばす)
 
 
@@ -82,7 +93,7 @@ def _api_get_once(path: str, token: str):
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as res:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as res:
             return json.loads(res.read().decode("utf-8")), False
     except urllib.error.HTTPError as e:
         body = ""
@@ -252,6 +263,7 @@ def scan_board(board, token, cache, previous=None):
     (通信の失敗でランキングから消えないように)。
     """
     previous = previous or {}
+    skipped = 0
     found = []
     started = time.time()
     fresh = 0
@@ -263,6 +275,10 @@ def scan_board(board, token, cache, previous=None):
 
         if tag in cache:
             stats = cache[tag]
+        elif over_budget():
+            # 時間切れ。新しくは調べず、前回の判定があればそれを使う
+            stats = previous.get(tag)
+            skipped += 1
         else:
             stats = analyze(tag, token)
             if stats is None and tag in previous:
@@ -298,7 +314,8 @@ def scan_board(board, token, cache, previous=None):
     for i, p in enumerate(found, 1):
         p["rank"] = i
 
-    print(f"  → {len(board)}人中 {len(found)}人が該当 (新規に調べたのは{fresh}人)")
+    note = f" / 時間切れで前回の判定を使ったのは{skipped}人" if skipped else ""
+    print(f"  → {len(board)}人中 {len(found)}人が該当 (新規に調べたのは{fresh}人{note})")
     return found
 
 
