@@ -40,6 +40,13 @@ DELAY = float(os.environ.get("SPARKY_DELAY", "0.25"))
 
 ROOT = Path(__file__).parent
 OUT_FILE = ROOT / "data" / "sparky.json"
+# 一度20勝した人の記録。対戦ログは直近25試合しか見えないので、見つけたら残しておく
+ACHIEVERS_FILE = ROOT / "data" / "achievers.json"
+
+# ---- 20勝チャレンジ ----
+# 対戦ログのイベント識別子(eventTag)と目標の勝利数。CR2 の collect.py と同じ値。
+# 来年のチャレンジが始まったら、ここを新しい年の値に書き換える。
+CHALLENGE = {"id": "crl20-2026", "label": "20勝達成", "eventTag": "#2CJUG2VL", "wins": 20}
 
 API_BASE = "https://proxy.royaleapi.dev/v1"
 
@@ -215,6 +222,22 @@ def uses_target(battle, tag) -> bool:
     return any(norm(c.get("name")) == TARGET_KEY for c in cards)
 
 
+def challenge_wins(battles, tag):
+    """20勝チャレンジで到達した勝利数。startingTrophies が それまでの勝ち数、
+    trophyChange が今回の増分になっている。"""
+    best = 0
+    for b in battles:
+        if b.get("eventTag") != CHALLENGE["eventTag"]:
+            continue
+        me = my_side(b, tag)
+        start = me.get("startingTrophies")
+        if not isinstance(start, int):
+            continue
+        change = me.get("trophyChange") if isinstance(me.get("trophyChange"), int) else 0
+        best = max(best, start + max(change, 0))
+    return best
+
+
 def analyze(tag, token):
     """対戦ログを見て使用状況をまとめる。判定できなければ None。
 
@@ -253,6 +276,7 @@ def analyze(tag, token):
         "deck": deck or [],
         "supportCards": support or [],
         "qualified": total > 0 and (hit / total) >= THRESHOLD,
+        "challengeWins": challenge_wins(battles, tag),
     }
 
 
@@ -385,6 +409,25 @@ def main():
             "リーダーボードが取得できませんでした。"
             "シーズン切り替え中か、エンドポイントの仕様が変わった可能性があります"
         )
+
+    # --- 20勝チャレンジの達成者 ---
+    # 今回の対戦ログで20勝に届いていた人を記録に足し、ランキングの各人に印を付ける
+    try:
+        achievers = json.loads(ACHIEVERS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        achievers = {}
+    done = achievers.setdefault(CHALLENGE["id"], {})
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for tag, stats in cache.items():
+        if stats and (stats.get("challengeWins") or 0) >= CHALLENGE["wins"] and tag not in done:
+            done[tag] = now_iso
+    for r in regions:
+        for p in r.get("players") or []:
+            tag = str(p.get("tag", "")).lstrip("#").upper()
+            p.pop("challengeWins", None)
+            p["achievements"] = [CHALLENGE["label"]] if tag in done else []
+    save_json(ACHIEVERS_FILE, achievers)
+    print(f"  {CHALLENGE['label']}: 記録済み {len(done)}人")
 
     save_json(
         OUT_FILE,
