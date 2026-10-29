@@ -418,8 +418,8 @@ def deck_ranking(entries, cache):
                 d["wins"] += 1
             elif u["w"] is False:
                 d["losses"] += 1
-    # 使われた試合数の多い順。同じなら使っている人の多い順
-    ranked = sorted(decks.values(), key=lambda d: (d["battles"], len(d["players"])), reverse=True)[:DECK_TOP]
+    # 使っている人の多い順(1人が何試合も使っても1人)。同じなら試合数の多い順
+    ranked = sorted(decks.values(), key=lambda d: (len(d["players"]), d["battles"]), reverse=True)[:DECK_TOP]
     out = []
     for d in ranked:
         tower = max(d["towers"].items(), key=lambda x: x[1])[0] if d["towers"] else None
