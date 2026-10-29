@@ -40,6 +40,11 @@ DELAY = float(os.environ.get("SPARKY_DELAY", "0.25"))
 
 ROOT = Path(__file__).parent
 OUT_FILE = ROOT / "data" / "sparky.json"
+# 天界デッキランキング(上位の人が天界で使っているデッキ)
+DECKS_FILE = ROOT / "data" / "decks.json"
+DECK_DAYS = int(os.environ.get("DECK_DAYS", "7"))      # これより古い試合は数えない
+DECK_TOP = int(os.environ.get("DECK_TOP", "60"))       # 1つのランキングに載せるデッキ数
+TENKAI_LEAGUE = 7                                      # 天界のリーグ番号(対戦ログの leagueNumber)
 # 一度20勝した人の記録。対戦ログは直近25試合しか見えないので、見つけたら残しておく
 ACHIEVERS_FILE = ROOT / "data" / "achievers.json"
 
@@ -238,6 +243,53 @@ def challenge_wins(battles, tag):
     return best
 
 
+def parse_time(raw):
+    try:
+        return datetime.strptime(raw, "%Y%m%dT%H%M%S.%fZ").replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def deck_of(side):
+    """デッキを [[カードID, 進化/ヒーロー], ...](並び順のまま) と、比べるための鍵にする。
+    左3枠の evolutionLevel は 1 が進化、2 がヒーロー。同じ8枚でも進化の付け方が違えば別のデッキ。"""
+    cards = []
+    for i, c in enumerate(side.get("cards") or []):
+        if not isinstance(c.get("id"), int):
+            return None, None
+        ev = c.get("evolutionLevel") if i < 3 and isinstance(c.get("evolutionLevel"), int) else 0
+        cards.append([c["id"], ev])
+    if len(cards) != 8:
+        return None, None
+    key = ",".join(f"{cid}.{ev}" for cid, ev in sorted(cards))
+    return cards, key
+
+
+def tenkai_decks(battles, tag, card_book):
+    """天界の試合で使ったデッキ。[{k, c, t, w}, ...]"""
+    since = datetime.now(timezone.utc).timestamp() - DECK_DAYS * 86400
+    out = []
+    for b in battles:
+        if b.get("type") != "pathOfLegend" or b.get("leagueNumber") != TENKAI_LEAGUE:
+            continue
+        when = parse_time(b.get("battleTime"))
+        if when is None or when.timestamp() < since:
+            continue
+        me = my_side(b, tag)
+        cards, key = deck_of(me)
+        if not key:
+            continue
+        for c in (me.get("cards") or []) + (me.get("supportCards") or []):
+            if isinstance(c.get("id"), int) and c["id"] not in card_book:
+                card_book[c["id"]] = {"n": c.get("name"), "e": c.get("elixirCost"), "i": c.get("iconUrls") or {}}
+        tower = next((c.get("id") for c in me.get("supportCards") or [] if isinstance(c.get("id"), int)), None)
+        out.append({"k": key, "c": cards, "t": tower, "w": battle_result(b, tag)})
+    return out
+
+
+CARD_BOOK = {}      # カードの名前と絵(デッキランキング用)
+
+
 def analyze(tag, token):
     """対戦ログを見て使用状況をまとめる。判定できなければ None。
 
@@ -277,6 +329,7 @@ def analyze(tag, token):
         "supportCards": support or [],
         "qualified": total > 0 and (hit / total) >= THRESHOLD,
         "challengeWins": challenge_wins(battles, tag),
+        "tenkai": tenkai_decks(battles, tag, CARD_BOOK),
     }
 
 
@@ -343,6 +396,77 @@ def scan_board(board, token, cache, previous=None):
     return found
 
 
+def deck_ranking(entries, cache):
+    """上位の人たちの天界の試合から、使われているデッキを数える。"""
+    decks = {}
+    players = battles = 0
+    for e in entries:
+        tag = str(e.get("tag", "")).lstrip("#").upper()
+        used = (cache.get(tag) or {}).get("tenkai")
+        if not used:
+            continue
+        players += 1
+        for u in used:
+            battles += 1
+            d = decks.setdefault(u["k"], {"cards": u["c"], "towers": {}, "battles": 0, "wins": 0,
+                                          "losses": 0, "players": set()})
+            d["battles"] += 1
+            d["players"].add(tag)
+            if u["t"]:
+                d["towers"][u["t"]] = d["towers"].get(u["t"], 0) + 1
+            if u["w"] is True:
+                d["wins"] += 1
+            elif u["w"] is False:
+                d["losses"] += 1
+    # 使われた試合数の多い順。同じなら使っている人の多い順
+    ranked = sorted(decks.values(), key=lambda d: (d["battles"], len(d["players"])), reverse=True)[:DECK_TOP]
+    out = []
+    for d in ranked:
+        tower = max(d["towers"].items(), key=lambda x: x[1])[0] if d["towers"] else None
+        out.append({"cards": d["cards"], "tower": tower, "battles": d["battles"], "players": len(d["players"]),
+                    "wins": d["wins"], "losses": d["losses"]})
+    return {"players": players, "battles": battles, "decks": out}
+
+
+def save_decks(boards, cache):
+    """天界デッキランキングを書き出す。世界TOP100 / 世界TOP1000 / 日本TOP1000"""
+    rank_of = lambda e, i: e.get("rank") if isinstance(e.get("rank"), int) else i
+    world = boards.get("global") or []
+    defs = [
+        ("world100", "世界TOP100", [e for i, e in enumerate(world, 1) if rank_of(e, i) <= 100]),
+        ("world1000", "世界TOP1000", world),
+        ("jp1000", "日本TOP1000", boards.get("jp") or []),
+    ]
+    try:
+        old = {b.get("key"): b for b in json.loads(DECKS_FILE.read_text(encoding="utf-8")).get("boards") or []}
+    except Exception:
+        old = {}
+    out = []
+    for key, label, entries in defs:
+        r = deck_ranking(entries, cache)
+        if not r["battles"] and key in old:
+            out.append({**old[key], "stale": True})      # 取れなかったときは前回のまま
+            print(f"  デッキ: {label} は前回の結果を使います")
+            continue
+        out.append({"key": key, "label": label, **r})
+        print(f"  デッキ: {label} {r['players']}人 / 天界の試合 {r['battles']} / デッキ {len(r['decks'])}種類を保存")
+    used = {cid for b in out for d in b.get("decks") or [] for cid, _ in d["cards"]}
+    used |= {d.get("tower") for b in out for d in b.get("decks") or [] if d.get("tower")}
+    cards = {str(cid): CARD_BOOK[cid] for cid in used if cid in CARD_BOOK}
+    # 前回のカード情報も残す(前回のままのランキングが参照しているかもしれない)
+    try:
+        for k, v in (json.loads(DECKS_FILE.read_text(encoding="utf-8")).get("cards") or {}).items():
+            cards.setdefault(k, v)
+    except Exception:
+        pass
+    save_json(DECKS_FILE, {
+        "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "days": DECK_DAYS,
+        "cards": cards,
+        "boards": out,
+    })
+
+
 def main():
     token = os.environ.get("CR_API_TOKEN", "").strip()
     if not token:
@@ -377,6 +501,7 @@ def main():
 
     cache = {}
     regions = []
+    boards = {}          # デッキランキング用に、地域ごとの上位の並びを残す
     started = time.time()
 
     for key, label, loc in targets:
@@ -391,6 +516,7 @@ def main():
                 print(f"  リーダーボードが空でした。{label}はスキップします")
             continue
         board = board[:SCAN_LIMIT]
+        boards[key] = board
         players = scan_board(board, token, cache, previous)
         regions.append(
             {
@@ -425,6 +551,7 @@ def main():
         for p in r.get("players") or []:
             tag = str(p.get("tag", "")).lstrip("#").upper()
             p.pop("challengeWins", None)
+            p.pop("tenkai", None)
             p["achievements"] = [CHALLENGE["label"]] if tag in done else []
     save_json(ACHIEVERS_FILE, achievers)
     print(f"  {CHALLENGE['label']}: 記録済み {len(done)}人")
@@ -438,6 +565,8 @@ def main():
             "regions": regions,
         },
     )
+
+    save_decks(boards, cache)
 
     total = sum(len(r["players"]) for r in regions)
     print(
