@@ -284,13 +284,26 @@ def tenkai_decks(battles, tag, card_book):
             continue
         for c in (me.get("cards") or []) + (me.get("supportCards") or []):
             if isinstance(c.get("id"), int) and c["id"] not in card_book:
-                card_book[c["id"]] = {"n": c.get("name"), "e": c.get("elixirCost"), "i": c.get("iconUrls") or {}}
+                card_book[c["id"]] = {"n": c.get("name"), "e": c.get("elixirCost"), "r": c.get("rarity"), "i": c.get("iconUrls") or {}}
         tower = next((c.get("id") for c in me.get("supportCards") or [] if isinstance(c.get("id"), int)), None)
         out.append({"k": key, "c": cards, "t": tower, "w": battle_result(b, tag)})
     return out
 
 
 CARD_BOOK = {}      # カードの名前と絵(デッキランキング用)
+ALL_CARDS = set()   # ゲームにある全カードのID(/cards から)
+
+
+def load_all_cards(token):
+    """ゲームにある全カード(タワーカードも)を /cards から読む。レアリティ・コスト・絵も入っている。"""
+    data = api_get("/cards", token) or {}
+    for c in (data.get("items") or []) + (data.get("supportItems") or []):
+        if not isinstance(c.get("id"), int):
+            continue
+        ALL_CARDS.add(c["id"])
+        CARD_BOOK[c["id"]] = {"n": c.get("name"), "e": c.get("elixirCost"), "r": c.get("rarity"),
+                              "i": c.get("iconUrls") or {}}
+    print(f"  全カード: {len(data.get('items') or [])}枚 + タワー{len(data.get('supportItems') or [])}種類")
 
 
 def card_usage(battles, tag):
@@ -309,7 +322,7 @@ def card_usage(battles, tag):
         total += 1
         for c in (me.get("cards") or []) + (me.get("supportCards") or []):
             if isinstance(c.get("id"), int) and c["id"] not in CARD_BOOK:
-                CARD_BOOK[c["id"]] = {"n": c.get("name"), "e": c.get("elixirCost"), "i": c.get("iconUrls") or {}}
+                CARD_BOOK[c["id"]] = {"n": c.get("name"), "e": c.get("elixirCost"), "r": c.get("rarity"), "i": c.get("iconUrls") or {}}
         tower = next((c.get("id") for c in me.get("supportCards") or [] if isinstance(c.get("id"), int)), None)
         r = battle_result(b, tag)
         for cid, ev in cards + ([[tower, 0]] if tower else []):
@@ -522,7 +535,8 @@ def save_users(boards, cache, achieved):
     out = list(players.values())
     used = {int(k) for p in out for k in p["q"]} | {cid for p in out for d in p["d"] for cid, _ in d["c"]}
     used |= {d["t"] for p in out for d in p["d"] if d.get("t")}
-    cards = {str(cid): CARD_BOOK[cid] for cid in used if cid in CARD_BOOK}
+    # 全カード(誰も使っていないカードも、絞り込みや一覧に出せるように)
+    cards = {str(cid): CARD_BOOK[cid] for cid in set(used) | set(ALL_CARDS) if cid in CARD_BOOK}
     try:
         for k, v in (json.loads(USERS_FILE.read_text(encoding="utf-8")).get("cards") or {}).items():
             cards.setdefault(k, v)
@@ -563,7 +577,8 @@ def save_decks(boards, cache):
     used = {cid for b in out for d in b.get("decks") or [] for cid, _ in d["cards"]}
     used |= {c["id"] for b in out for c in b.get("cards") or []}
     used |= {d.get("tower") for b in out for d in b.get("decks") or [] if d.get("tower")}
-    cards = {str(cid): CARD_BOOK[cid] for cid in used if cid in CARD_BOOK}
+    # 全カード(誰も使っていないカードも、絞り込みや一覧に出せるように)
+    cards = {str(cid): CARD_BOOK[cid] for cid in set(used) | set(ALL_CARDS) if cid in CARD_BOOK}
     # 前回のカード情報も残す(前回のままのランキングが参照しているかもしれない)
     try:
         for k, v in (json.loads(DECKS_FILE.read_text(encoding="utf-8")).get("cards") or {}).items():
@@ -585,6 +600,7 @@ def main():
 
     print(f"対象カード: {TARGET_CARD} / 判定: 直近の{THRESHOLD:.0%}以上で使用")
 
+    load_all_cards(token)
     jp_id = find_location(token)
     if jp_id is None:
         print("  警告: 日本のロケーションIDが見つかりません。世界だけ集計します")
