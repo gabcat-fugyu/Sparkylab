@@ -43,7 +43,7 @@ OUT_FILE = ROOT / "data" / "sparky.json"
 # 天界デッキランキング(上位の人が天界で使っているデッキ)
 DECKS_FILE = ROOT / "data" / "decks.json"
 DECK_DAYS = int(os.environ.get("DECK_DAYS", "7"))      # これより古い試合は数えない
-DECK_TOP = int(os.environ.get("DECK_TOP", "60"))       # 1つのランキングに載せるデッキ数
+DECK_TOP = int(os.environ.get("DECK_TOP", "400"))      # 1つのランキングに載せるデッキ数(カードで絞り込めるよう多めに)
 TENKAI_LEAGUE = 7                                      # 天界のリーグ番号(対戦ログの leagueNumber)
 # 一度20勝した人の記録。対戦ログは直近25試合しか見えないので、見つけたら残しておく
 ACHIEVERS_FILE = ROOT / "data" / "achievers.json"
@@ -399,6 +399,7 @@ def scan_board(board, token, cache, previous=None):
 def deck_ranking(entries, cache):
     """上位の人たちの天界の試合から、使われているデッキを数える。"""
     decks = {}
+    cards = {}           # カード別: 使った人・試合・勝敗・進化/ヒーローで使った人
     players = battles = 0
     for e in entries:
         tag = str(e.get("tag", "")).lstrip("#").upper()
@@ -418,6 +419,23 @@ def deck_ranking(entries, cache):
                 d["wins"] += 1
             elif u["w"] is False:
                 d["losses"] += 1
+            for cid, ev in u["c"]:
+                c = cards.setdefault(cid, {"players": set(), "battles": 0, "wins": 0, "losses": 0,
+                                           "evo": set(), "hero": set()})
+                c["players"].add(tag)
+                c["battles"] += 1
+                if u["w"] is True:
+                    c["wins"] += 1
+                elif u["w"] is False:
+                    c["losses"] += 1
+                if ev == 1:
+                    c["evo"].add(tag)
+                elif ev == 2:
+                    c["hero"].add(tag)
+    card_list = sorted(
+        ({"id": cid, "players": len(c["players"]), "battles": c["battles"], "wins": c["wins"], "losses": c["losses"],
+          "evo": len(c["evo"]), "hero": len(c["hero"])} for cid, c in cards.items()),
+        key=lambda c: (c["players"], c["battles"]), reverse=True)
     # 使っている人の多い順(1人が何試合も使っても1人)。同じなら試合数の多い順
     ranked = sorted(decks.values(), key=lambda d: (len(d["players"]), d["battles"]), reverse=True)[:DECK_TOP]
     out = []
@@ -425,7 +443,7 @@ def deck_ranking(entries, cache):
         tower = max(d["towers"].items(), key=lambda x: x[1])[0] if d["towers"] else None
         out.append({"cards": d["cards"], "tower": tower, "battles": d["battles"], "players": len(d["players"]),
                     "wins": d["wins"], "losses": d["losses"]})
-    return {"players": players, "battles": battles, "decks": out}
+    return {"players": players, "battles": battles, "decks": out, "cards": card_list}
 
 
 def save_decks(boards, cache):
@@ -451,6 +469,7 @@ def save_decks(boards, cache):
         out.append({"key": key, "label": label, **r})
         print(f"  デッキ: {label} {r['players']}人 / 天界の試合 {r['battles']} / デッキ {len(r['decks'])}種類を保存")
     used = {cid for b in out for d in b.get("decks") or [] for cid, _ in d["cards"]}
+    used |= {c["id"] for b in out for c in b.get("cards") or []}
     used |= {d.get("tower") for b in out for d in b.get("decks") or [] if d.get("tower")}
     cards = {str(cid): CARD_BOOK[cid] for cid in used if cid in CARD_BOOK}
     # 前回のカード情報も残す(前回のままのランキングが参照しているかもしれない)
